@@ -1,0 +1,469 @@
+Gmacro
+
+orange
+echo
+##################################################################
+# By: J.Hockett
+# Rev 1
+##################################################################
+
+
+##################################################################
+# User input section
+##################################################################
+
+
+Note Enter the start date for the analysis. Use "20xx-xx-xx 00:00:00"
+Set c50;
+	Format (a23);
+	File "Terminal";
+	Nobs 1.
+Copy c50 k1
+Name k1 "Sdate"
+
+
+Note Enter the end date for the analysis. Use "20xx-xx-xx 00:00:00"
+Set c51;
+	Format (a23);
+	File "Terminal";
+	Nobs 1.
+Copy c51 k2
+Name k2 "Edate"
+
+Erase c50 c51
+
+
+###############################################################################
+# ODBC call
+###############################################################################
+
+ODBC;
+
+  Connect "DSN=DAS;Description=Machine Alarms;Trusted_Connection=Yes;APP=Mini" &
+   "tab 17 Statistical Software;WSID=CHLWNBK059;DATABASE=DAS_AwxLogger_Data";
+   SQLString "SELECT ""RV1"",""ActiveTime"",""RV2"",""RV3"",""RV4"",""RV5"",""R" &
+   "V6"",""RV7"",""RV8"",""RV9"",""RV10"",""RV11"",""RV12"",""RV13"",""RV14""," &
+   """RV15"",""RV16"",""EventTime"",""Message"" FROM ""DAS_AwxLogger_Data""." &
+   """dbo"".""AlarmLog"" where ""EventTime"" >= '" Sdate "'" &
+   " and  ""EventTime"" <= '" Edate "'  and  ""RV10"" in ('Breakdown', 'Operator')".
+
+###################################################################################
+# Subsetting Worksheet 1 based on ABM
+# Cycle count coming from Infinite cycle count   
+###################################################################################
+
+Subset;
+	Include;
+	Where "RV2=""CA01""";
+	Name "CA01".
+
+Worksheet "Worksheet 1"
+
+Subset;
+	Include;
+	Where "RV2=""CA02""";
+	Name "CA02".
+
+Worksheet "Worksheet 1"
+
+Subset;
+	Include;
+	Where "RV2=""CA04""";
+	Name "CA04".
+
+Worksheet "Worksheet 1"
+
+Subset;
+	Include;
+	Where "RV2=""CA05""";
+	Name "CA05".
+
+Worksheet "Worksheet 1"
+
+Subset;
+	Include;
+	Where "RV2=""CA06""";
+	Name "CA06".
+
+Worksheet "Worksheet 1"
+
+
+Subset;
+	Include;
+	Where "RV2=""CA09""";
+	Name "CA09".
+
+Worksheet "Worksheet 1"
+
+Subset;
+	Include;
+	Where "RV2=""CA10""";
+	Name "CA10".
+##################################################################
+
+
+
+
+Worksheet "Worksheet 1"
+
+######Creating Counts for Worksheet "ABM" Do Loop
+
+Name C45 "Tally" C46 "Tally_1".
+ Tally 'RV2';
+   Counts;
+  Store 'Tally' - 'Tally_1'.
+
+######Do Loop for ABM's
+
+let k11 = count(c45)
+
+
+name k11 'NumberofABMs'
+
+do k10 = 1:k11
+
+  let k4 = c45[k10]
+
+
+
+######Sequencing Worksheet
+Worksheet k4
+ 
+
+######Manipulating ABM Worksheets for analysis
+
+######Setting constants for cycles
+
+numeric 'RV14' c55
+Name c55 "Infinite_Cycle_Count"
+Name c22 "CycleCount"
+Statistics C55;
+  Range 'CycleCount'.
+
+Copy c22 k3
+
+Name k3 "ABMTotalCyclesL"
+
+Copy c22 k4
+
+Name k4 "ABMTotalCyclesR"
+
+Name C20 "AlarmName" C21 "Count".
+
+
+
+#######Setting rows for alarm constants
+Brief 0
+
+Tally 'Message';
+  Counts;
+  Store 'AlarmName' - 'Count'.
+  
+
+
+Transpose 'Count';
+  After;
+  Varnames 'AlarmName'.
+
+Brief 2
+
+
+LET c28 = RIGHT ('RV2',2)
+Numeric c28 c28
+Name c28 "ABM"
+
+
+
+
+If 'ABM'[1] < 9
+
+######Statistical testing spout not in place L vs R
+
+Let k15 = 'RV2' [1]
+LET K25 = Concatenate (k15,"SPOUTL")
+LET K26 = Concatenate (k15,"SPOUTR")
+
+
+Name K20 "SPOUTNOTINPLACELEFT"
+Name C48 "SpoutTestL"
+LET C48 = Any ('Message',"SPOUT- NOT IN PLACE- LEFT .")
+
+If Sum (C48) > 0 
+	Let k20 = 'SPOUT- NOT IN PLACE- LEFT .'
+Else
+	Let k20 = 0
+Note SPOUT- NOT IN PLACE- LEFT . = 0
+EndIf
+
+
+Name K21 "SPOUTNOTINPLACERIGHT"
+Name C49 "SpoutTestR"
+LET C49 = Any ('Message',"SPOUT- NOT IN PLACE- RIGHT .")
+
+If Sum (C49) > 0 
+	Let k21 = 'SPOUT- NOT IN PLACE- RIGHT .'
+Else
+	Let k21 = 0
+Note SPOUT- NOT IN PLACE- RIGHT . = 0
+EndIf
+
+
+
+PTwo k3 k20 k4 k21;
+	Confidence 95.0;
+	Test 0.0;
+	Alternative 0;
+	Spvalue c25.
+
+
+Name c25 "SpoutpValue"
+Let K22 = c25[1]
+
+
+
+IF K20 >5 AND K21 > 5 and K22 <.05
+
+ XPTwo k3 k20 k4 k21;
+    YNames k25 k26;
+    Alternative 0;
+    Alpha 0.05.
+    
+
+ENDIF
+
+######Statistical testing strip not in place L vs R
+
+
+LET K27 = Concatenate (k15,"STRIPL")
+LET K28 = Concatenate (k15,"STRIPR")
+
+
+Name K30 "STRIPNOTINPLACELEFT"
+Name C50 "StripTestL"
+LET C50 = Any ('Message',"STRIP- NOT IN PLACE- LEFT .")
+
+If Sum (C50) > 0 
+	Let k30 = 'STRIP- NOT IN PLACE- LEFT .'
+Else
+	Let k30 = 0
+Note STRIP- NOT IN PLACE- LEFT . = 0
+EndIf
+
+
+Name K31 "STRIPNOTINPLACERIGHT"
+Name C51 "StripTestR"
+LET C51 = Any ('Message',"STRIP- NOT IN PLACE- RIGHT .")
+
+If Sum (C51) > 0 
+	Let k31 = 'STRIP- NOT IN PLACE- RIGHT .'
+Else
+	Let k31 = 0
+Note STRIP- NOT IN PLACE- RIGHT . = 0
+EndIf
+
+
+PTwo k3 k30 k4 k31;
+	Confidence 95.0;
+	Test 0.0;
+	Alternative 0;
+	Spvalue c26.
+
+
+Name c26 "Strip_pValue"
+Let K23 = c26[1]
+
+
+
+IF K30 > 5 AND K31 > 5 and  K23 <.05
+
+ XPTwo k3 k30 k4 k31;
+    YNames k27 k28;
+    Alternative 0;
+    Alpha 0.05.
+
+EndIf
+
+
+ElseIf 'ABM'[1] > 7
+
+#########################################################
+
+Let k15 = 'RV2' [1]
+LET K45 = Concatenate (k15,"SPOUTPFL")
+LET K46 = Concatenate (k15,"SPOUTPFR")
+LET K47 = Concatenate (k15,"SPOUTPRL")
+LET K48 = Concatenate (k15,"SPOUTPRR")
+
+
+
+
+
+Name K40 "SPNOTINPLACEPFL"
+Name C40 "SPNTNPLCPUSHFL"
+LET C40 = Any ('Message',"SPOUT- NOT IN PLACE AT PUSHER- FRONT- LEFT .")
+
+If Sum (C40) > 0 
+	Let k40 = Sum (c40)
+Else
+	Let k40 = 0
+Note SPOUT- NOT IN PLACE AT PUSHER- FRONT- LEFT . = 0
+EndIf
+
+
+
+Name K41 "SPNOTINPLACEPFR"
+Name C41 "SPNTNPLCPUSHFR"
+LET C41 = Any ('Message',"SPOUT- NOT IN PLACE AT PUSHER- FRONT- RIGHT .")
+
+If Sum (C41) > 0 
+	Let k41 = Sum (c41)
+Else
+	Let k41 = 0
+Note SPOUT- NOT IN PLACE AT PUSHER- FRONT- RIGHT . = 0
+EndIf
+
+
+
+Name K42 "SPNOTINPLACEPRL"
+Name C42 "SPNTNPLCPUSHRL"
+LET C42 = Any ('Message',"SPOUT- NOT IN PLACE AT PUSHER- REAR- LEFT .")
+
+If Sum (C42) > 0 
+	Let k42 = Sum (c42)
+Else
+	Let k42 = 0
+Note SPOUT- NOT IN PLACE AT PUSHER- REAR- LEFT . = 0
+EndIf
+
+
+
+Name K43 "SPNOTINPLACEPRR"
+Name C43 "SPNTNPLCPUSHRR"
+LET C43 = Any ('Message',"SPOUT- NOT IN PLACE AT PUSHER- REAR- RIGHT .")
+
+If Sum (C43) > 0 
+	Let k43 = Sum (c43)
+Else
+	Let k43 = 0
+Note SPOUT- NOT IN PLACE AT PUSHER- REAR- RIGHT . = 0
+EndIf
+
+
+XPCS K3 K40 K3 K41 K4 k42 k4 k43;
+	SNames K45 K46 K47 K48;
+	PName "SPOUT_NT_IN_PLACE_AT_PUSHER";
+	XVName "X";
+	Alpha 0.05.
+	
+######################################################	
+
+
+Let k15 = 'RV2' [1]
+LET K55 = Concatenate (k15,"STRIPFL")
+LET K56 = Concatenate (k15,"STRIPFR")
+LET K57 = Concatenate (k15,"STRIPRL")
+LET K58 = Concatenate (k15,"STRIPRR")
+
+
+
+
+
+Name K50 "STRIPMISSINGFL"
+Name C50 "STRIPMISSINGCNTFL"
+LET C50 = Any ('Message',"STRIP- MISSING- FRONT- LEFT .")
+
+If Sum (C50) > 0 
+	Let k50 = Sum (c50)
+Else
+	Let k50 = 0
+Note STRIP- MISSING- FRONT- LEFT . = 0
+EndIf
+
+
+
+Name K51 "STRIPMISSINGFR"
+Name C51 "STRIPMISSINGCNTFR"
+LET C51 = Any ('Message',"STRIP- MISSING- FRONT- RIGHT .")
+
+If Sum (C51) > 0 
+	Let k51 = Sum (c51)
+Else
+	Let k51 = 0
+Note STRIP- MISSING- FRONT- RIGHT . = 0
+EndIf
+
+
+
+Name K52 "STRIPMISSINGRL"
+Name C52 "STRIPMISSINGCNTRL"
+LET C52 = Any ('Message',"STRIP- MISSING- REAR- LEFT .")
+
+If Sum (C52) > 0 
+	Let k52 = Sum (c52)
+Else
+	Let k52 = 0
+Note STRIP- MISSING- REAR- LEFT . = 0
+EndIf
+
+
+
+Name K53 "STRIPMISSINGRR"
+Name C53 "STRIPMISSINGCNTRR"
+LET C53 = Any ('Message',"STRIP- MISSING- REAR- RIGHT .")
+
+If Sum (C53) > 0 
+	Let k53 = Sum (c53)
+Else
+	Let k53 = 0
+Note STRIP- MISSING- REAR- RIGHT . = 0
+EndIf
+
+
+XPCS K3 K50 K3 K51 K4 k52 k4 k53;
+	SNames K55 K56 K57 K58;
+	PName "STRIPMISSING";
+	XVName "X";
+	Alpha 0.05.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+EndIf
+
+
+
+	
+
+###### Necessary as constant k10 needs to be updated and it is stored in WSheet1
+Worksheet "Worksheet 1"  
+
+enddo
+
+
+
+noecho
+
+
+EndMacro
